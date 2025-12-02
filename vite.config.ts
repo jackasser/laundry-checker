@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
       // GitHub Pagesにデプロイする場合は、リポジトリ名に合わせて変更してください
       // 例: base: '/laundry-checker/'
       // ユーザー名.github.ioリポジトリの場合は '/' のままでOK
-      base: './',
+      base: '/laundry-checker/',
       server: {
         port: 3000,
         host: '0.0.0.0',
