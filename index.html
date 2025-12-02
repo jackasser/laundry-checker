@@ -43,6 +43,7 @@
         to { opacity: 1; transform: translateY(0); }
       }
     </style>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
@@ -72,6 +73,7 @@
               min: "min",
               calculating: "Calc...",
               finished: "Finished",
+              waiting_for_removal: "Pickup Wait",
               in_use: "In Use",
               error: "Error"
             }
@@ -93,6 +95,7 @@
               min: "分",
               calculating: "计算中...",
               finished: "已完成",
+              waiting_for_removal: "待取衣",
               in_use: "使用中",
               error: "故障"
             }
@@ -114,6 +117,7 @@
               min: "分",
               calculating: "計算中...",
               finished: "已完成",
+              waiting_for_removal: "待取衣",
               in_use: "使用中",
               error: "故障"
             }
@@ -135,6 +139,7 @@
               min: "분",
               calculating: "계산 중...",
               finished: "종료",
+              waiting_for_removal: "수거 대기",
               in_use: "사용 중",
               error: "고장"
             }
@@ -156,6 +161,7 @@
               min: "分",
               calculating: "計算中...",
               finished: "運転終了",
+              waiting_for_removal: "取り出し待ち",
               in_use: "運転中",
               error: "故障"
             }
@@ -177,6 +183,7 @@
               min: "phút",
               calculating: "Đang tính...",
               finished: "Đã xong",
+              waiting_for_removal: "Chờ lấy",
               in_use: "Đang chạy",
               error: "Lỗi"
             }
@@ -198,6 +205,7 @@
               min: "นาที",
               calculating: "กำลังคำนวณ...",
               finished: "เสร็จสิ้น",
+              waiting_for_removal: "รอเอาออก",
               in_use: "กำลังทำงาน",
               error: "ข้อผิดพลาด"
             }
@@ -219,6 +227,7 @@
               min: "min",
               calculating: "Calc...",
               finished: "Terminé",
+              waiting_for_removal: "Attente retrait",
               in_use: "En cours",
               error: "Erreur"
             }
@@ -269,6 +278,8 @@
                     if (src.includes("vacant") || src.includes("aki") || src.includes("ok") || src.includes("open") || className.includes("available")) text += " Available ";
                     if (src.includes("working") || src.includes("unten") || src.includes("use") || src.includes("busy") || src.includes("running") || className.includes("busy")) text += " In Use ";
                     if (src.includes("stop") || src.includes("end") || src.includes("finish")) text += " Finished ";
+                    // Added explicit check for 'wait' or 'toridashi' in image sources
+                    if (src.includes("wait") || src.includes("toridashi")) text += " WaitingForRemoval ";
                     
                     if (src.includes("sentaku") || src.includes("wash") || className.includes("wash")) text += " Washer ";
                     if (src.includes("kansou") || src.includes("dry") || className.includes("dry")) text += " Dryer ";
@@ -291,8 +302,8 @@
                 const candidates = Array.from(doc.querySelectorAll("div, li, tr, article, dl, section, td"));
                 const idPattern = /(?:No\.|#|号機|^|\s)(\d{1,2})(?:\s|$|号|番)/i;
                 const typePattern = /洗濯|乾燥|Wash|Dry|Sneaker|Shoes|スニーカー/i;
-                // Added "取り出し" (Removal/Pickup) to the pattern to detect "Waiting for removal" state
-                const statusPattern = /空き|Available|空室|利用可|運転中|稼働中|In Use|終了|Finished|残り|あと|Remaining|min|分|取り出し/i;
+                // Expanded pattern to catch variations of "Take out/Removal" (取り出し, 取出し, 取出) and English "Wait"
+                const statusPattern = /空き|Available|空室|利用可|運転中|稼働中|In Use|終了|Finished|残り|あと|Remaining|min|分|取り?出し|取出|Wait/i;
 
                 const scoredCandidates = [];
 
@@ -345,8 +356,11 @@
                     } else if (/運転中|稼働中|In Use|Running|Driving/i.test(text)) {
                         isAvailable = false;
                         rawStatus = "In Use";
-                    // Added "取り出し" (Waiting for removal) to the Finished state logic
-                    } else if (/終了|Finished|Stop|取り出し/i.test(text)) {
+                    // Robust check for "Waiting for removal" (取り出し, 取出し, 取出, WaitingForRemoval, Pickup)
+                    } else if (/(?:取り?出し|取出)(?:待ち)?|WaitingForRemoval|Pickup/i.test(text)) {
+                        isAvailable = false;
+                        rawStatus = "WaitingForRemoval";
+                    } else if (/終了|Finished|Stop/i.test(text)) {
                         isAvailable = false;
                         rawStatus = "Finished";
                     } else if (/故障|Error|Out of order/i.test(text)) {
@@ -483,6 +497,14 @@
                 return cap; 
             };
 
+            // Helper to determine status style
+            const getStatusStyle = (machine) => {
+                if (machine.isAvailable) return "text-green-600 bg-green-50";
+                if (machine.rawStatus === "WaitingForRemoval") return "text-orange-700 bg-orange-100 border border-orange-200"; // Increased visibility for pickup wait
+                if (machine.rawStatus === "Error") return "text-gray-500 bg-gray-200";
+                return "text-red-500 bg-red-50"; // Default Red for In Use / Finished
+            };
+
             return (
                 <div className="min-h-screen font-sans bg-gray-50 text-gray-800 flex flex-col">
                     <header className="bg-white shadow-sm sticky top-0 z-10">
@@ -598,6 +620,7 @@
 
                                         const translatedType = getTranslatedType(machine.rawType);
                                         const translatedCapacity = getTranslatedCapacity(machine.rawCapacity);
+                                        const statusStyle = getStatusStyle(machine);
 
                                         return (
                                             <div 
@@ -618,7 +641,11 @@
                                                             <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                                                         </span>
                                                     ) : (
-                                                        <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                                                        machine.rawStatus === "WaitingForRemoval" ? (
+                                                            <span className="h-2 w-2 rounded-full bg-orange-500"></span>
+                                                        ) : (
+                                                            <span className="h-2 w-2 rounded-full bg-red-400"></span>
+                                                        )
                                                     )}
                                                 </div>
 
@@ -630,11 +657,7 @@
                                                     {translatedCapacity && <div className="text-[10px] text-gray-400 mt-0.5">{translatedCapacity}</div>}
                                                 </div>
 
-                                                <div className={`text-center text-sm font-bold rounded py-1 ${
-                                                    machine.isAvailable 
-                                                        ? "text-green-600 bg-green-50" 
-                                                        : (machine.rawStatus === "Error" ? "text-gray-500 bg-gray-200" : "text-red-500 bg-red-50")
-                                                }`}>
+                                                <div className={`text-center text-sm font-bold rounded py-1 ${statusStyle}`}>
                                                     {machine.isAvailable ? (
                                                         <span>{vocab.available}</span> 
                                                     ) : (
@@ -644,7 +667,11 @@
                                                                 <span className="whitespace-nowrap">{machine.remainingMinutes} {vocab.min}</span>
                                                             </span>
                                                         ) : (
-                                                            <span>{machine.rawStatus === "Finished" ? vocab.finished : (machine.rawStatus === "Error" ? vocab.error : vocab.in_use)}</span>
+                                                            <span>
+                                                                {machine.rawStatus === "Finished" ? vocab.finished : 
+                                                                 machine.rawStatus === "WaitingForRemoval" ? vocab.waiting_for_removal :
+                                                                 machine.rawStatus === "Error" ? vocab.error : vocab.in_use}
+                                                            </span>
                                                         )
                                                     )}
                                                 </div>
@@ -673,5 +700,6 @@
         const root = createRoot(document.getElementById("root"));
         root.render(<App />);
     </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
